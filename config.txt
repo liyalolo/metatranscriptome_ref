@@ -1,0 +1,141 @@
+gtf = /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/NCBI/gene/GCF_000001635.25_GRCm38.p5_genomic.gff.gtf
+genome = /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/NCBI/genome/genome.fa
+desc = /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/anno/mm10.desc
+project_id = A731
+#project_name =  A731P1_20160824
+project_name =  A731P2
+genome_version = none
+
+
+Filter_method = Soapnuke
+## 1. filter parameter for soapnuke ####
+# filter for RNA sequence
+##  -l low quality threshold ####
+## -q low quality rate ##
+## -n  N rate threshold ##
+##  -p filter poly A, percent of A, 0 means do not filter
+# -i remove index
+# -c the read number you want to keep in each clean fq file
+# --seqType sequence type 0 for old,1 for new
+#  -f, --adapter1  : <s> 3' adapter sequence or adapter list file of fq1 file
+#  -r, --adapter2  : <s> 5' adapter sequence or adapter list file of fq2 file [only for PE reads]
+# -Q  quality system 1:illumina, 2:sanger
+Soapnuke_opt = filter -l 10 -q 0.5 -n 0.05 -p 1  -i -c 0 -Q 2 --seqType 1 -f GATCGGAAGAGCACACGTCTGAACTCCAGTCAC -r ACACTCTTTCCCTACACGACGCTCTTCCGATC
+
+Align_method = Hisat
+## 2. alignment parameter for hisat #####
+## first need build the index and splice site index ###
+## /Result/huangfei/software/hisat-0.1.6-beta/hisat-build -a  --bmaxdivn 4 -f /Database/pub/hg19/Genome/genome.fa /Result/huangfei/test/hisat/index2/hg19 ##
+## python /Result/huangfei/software/hisat-0.1.5-beta/extract_splice_sites.py /Result/huangfei/test_data/human/Homo_sapiens.GRCh37.74.gtf >Homo_sapiens.GRCh37.74_splice_site.txt
+## -q Reads are FASTQ files
+## --known-splicesite-infile: the known splice site file
+## --phred33   --phred64 quality system
+## --I, --X : the  minimum/maximum fragment length for paired alignment
+# --fr/--rf/--ff The upstream/downstream mate orientations for a valid paired-end alignment against the forward reference strand
+Hisat_opt =  -q  --phred33  --n-ceil "L,0,0.05"  -I 100 -X 500 -t -p 12 --known-splicesite-infile /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/NCBI/gene/mm10.splice_site.txt  --no-unal  -x /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/NCBI/genome/genome
+
+Expression_method = Htseq
+Exon_expression_method = Htseq
+## 3 HTSeq #########
+## -s  yes/no strand-specific assay
+## -a skip all reads with alignment quality lower
+## -t feature type (3rd column in GFF file) to be used
+## -m union/intersection-strict/intersection-nonempty, Mode to handle reads overlapping more than one feature
+Htseq_opt = -s no -a 0 -t exon -m intersection-nonempty
+
+Isoform_method = RSEM
+### 4 transcript level expression level ####
+## --strand-specific
+Rsem_opt =  --phred64-quals --paired-end  --num-threads 5  --samtools-sort-mem 4G
+
+Diff_method = DEGseq
+## 4 diff DEGseq: sample without replication; DESeq2: sample with replication ###
+Degseq_opt = -control Vehicle,Vehicle,Vehicle -treat Melatonin,TM,Leptin
+
+## 5 enrichment analysis ########
+## -a the path with prefix to the gene annotation file *.annot,*.ko
+Enrich_opt =  -a /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/NCBI/anno/mm10 -c /Database/go/RNA/current/go.class -m /Database/kegg/RNA/59.3/komap/animal_ko_map.tab
+
+Cluster_method = pheatmap
+### 6 cluster with pheatmap ###
+### -sample sample cluster ##
+### -diff different value cluster ##
+#Pheatmap_opt = -sample -diff  -cluster 'WT-vs-OE' -group 'WT:WT_1,WT_2,WT_3;OE:OE_1,OE_2,OE_3' -inter  -union
+#Pheatmap_opt = -sample -diff -cluster 'Vehicle-vs-Melatonin,Control-vs-MT;Vehicle-vs-TM;Vehicle-vs-Melatonin;Control-vs-MT;Vehicle-vs-TM,Vehicle-vs-Leptin;Vehicle-vs-TM,Vehicle-vs-Leptin,Vehicle-vs-Melatonin'  -union
+Pheatmap_opt = -sample -diff -cluster 'Vehicle-vs-Melatonin;Vehicle-vs-TM;Vehicle-vs-TM,Vehicle-vs-Leptin;Vehicle-vs-TM,Vehicle-vs-Leptin,Vehicle-vs-Melatonin'  -union
+
+Assemble_method = Stringtie
+### 7 transcript reconstruction ###
+### -m minimum assembled transcript length, default 100
+## -j minimum junction coverage, default 1
+## -p number of threads to use, default 1
+Stringtie_opt = -j 2 -m 100 -p 6
+
+### 8  novel gene extend lncRNA predict ####
+## -m or --model : assign the classification models ("ve" for vertebrate species, "pl" for plat species), for CNCI identity non-coding
+## -e max fpkm cutoff >=3(default)
+## -l novel transcript length, 200
+Novelextend_opt = -m ve -e 3 -l 200
+
+#As_method = AS
+As_method = MATS
+### 9 alternative splice #########
+### -num AS detect type number 4 or 7
+## -d  depth for junction
+## -e extend for junction
+## -S  intron max size
+##<A1><A1>-C intron coverage ratio: 90% coveraged
+##<A1><A1>-ip intron min expression ratio of related exons
+#As_opt = -num 4 -d 2 -e 5 -S 1000000 -C 90 -ip 15
+Mats_opt = -c 0.9 -j 2
+
+Snp_method = GATK
+### 10 SNP for GATK #####
+## -mindepth: min depth for variant
+## -mindist: min distance between two variant
+## -allele_fre: min allele frequency
+## -dbsnp:  snp database for variant annotation
+## -ccds: CCDS for variant annotation, created by SNPannotDeal.pl
+## -refseq: RefSeq for variant annotation, created by SNPannotDeal.pl
+## -ensembl: Ensembl for variant annotation, created by SNPannotDeal.pl
+Gatk_opt = -mindepth 4 -mindist 5  -stand_call_conf 20.0 -stand_emit_conf 20.0 -allele_fre 0 -refseq /Disk04/Project/RNA/yilingbo/Database/Database/ref/mm10/NCBI/gene/mm10_refSeq_gff.format.gz
+
+
+#Conditionspe_method = CSP
+# -t FLT        the maximal expression cutoff that genes should larger than
+# -a FLT        the minimal ratio of Observed to Expected reads number
+# -p FLT        the maximal tissue specific expression p-value
+#Csp_opt = -t 5.0 -a 5.0 -p 0.001
+
+### TF ###
+##-s:  the species for analysis, one of: animal,plant,fungi
+#-e:  the expression file.
+#-n: the gtf,gff,psl format gene CDS annotation file, e.g.: the three colmun must contain the CDS in gtf and gff.
+#-t : the type of input annotation file(gtf,gff,psl), CDS or EXON
+# -r:  the strand information to consider for CDS prediction, 0: no consider strand, 1: +, 2:-. [0]
+#-g: the fasta format genome file.
+#-i: the input fasta format sequence file. delimed by ','
+#-p: the type of input sequence file: T - protein, F - nucleotide
+#-opt: the option for hmmsearch. [ --domE  4 --cpu 6 ]
+#-v the evalue to hmmsearch result filtering cutoff  [0.0001]
+#-a: output result name prefix [$sample]
+Tf_opt = -s animal -v 0.0001 -t EXON -r 1  -a  AllSample  -opt ' --domT 4 --cpu 6 '
+
+## Network ###
+Network_method = STRING
+## extract network from each differentially expressed genes file.###
+## -a: taxid, like human is 9606
+String_opt = -a 10090
+
+##### 12.FASTQ path #####
+KeyName=TM
+q1=/Disk04/Project/RNA/ref/A731/data/3_HWM57CCXX_L4_1.fq.gz
+q2=/Disk04/Project/RNA/ref/A731/data/3_HWM57CCXX_L4_2.fq.gz
+
+KeyName=Vehicle
+q1=/Disk04/Project/RNA/ref/A731/data/s4_HWM5NCCXX_L5_1.fq.gz
+q2=/Disk04/Project/RNA/ref/A731/data/s4_HWM5NCCXX_L5_2.fq.gz
+
+KeyName=Melatonin
+q1=/Disk04/Project/RNA/ref/A731/data/5_HWM57CCXX_L4_1.fq.gz
+q2=/Disk04/Project/RNA/ref/A731/data/5_HWM57CCXX_L4_2.fq.gz
